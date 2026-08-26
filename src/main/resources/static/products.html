@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ecommerce 商品展示</title>
+  <style>
+    body { max-width: 980px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; color: #243047; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    form, article { border: 1px solid #d9e0ea; border-radius: 10px; padding: 1rem; margin: 1rem 0; }
+    input, textarea, button { box-sizing: border-box; padding: .6rem; margin: .25rem 0; font: inherit; }
+    input, textarea { width: 100%; } button { cursor: pointer; }
+    #products { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    article { margin: 0; } article img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }
+    .muted { color: #68758a; } .error { color: #b42318; } .ok { color: #087443; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Demo 商品展示</h1>
+    <span id="message" class="muted">載入商品中…</span>
+  </header>
+
+  <form id="login-form">
+    <h2>會員登入</h2>
+    <input id="identifier" placeholder="Email 或 username" required>
+    <input id="password" type="password" placeholder="密碼" required>
+    <button>登入</button>
+    <button type="button" id="logout">登出</button>
+  </form>
+
+  <form id="product-form" class="hidden">
+    <h2>新增商品（賣方 Demo）</h2>
+    <input id="name" placeholder="商品名稱" required maxlength="200">
+    <textarea id="description" placeholder="商品描述" required maxlength="5000"></textarea>
+    <input id="price" type="number" min="0" step="0.01" placeholder="價格（TWD）" required>
+    <input id="stock" type="number" min="0" step="1" placeholder="庫存" required>
+    <input id="category" placeholder="分類" required maxlength="100">
+    <input id="image" type="file" accept="image/jpeg,image/png,image/webp">
+    <button>建立商品</button>
+  </form>
+
+  <section>
+    <h2>商品列表</h2>
+    <div id="products"></div>
+  </section>
+
+  <script>
+    const message = document.querySelector('#message');
+    const products = document.querySelector('#products');
+    const loginIdentifier = document.querySelector('#identifier');
+    const loginPassword = document.querySelector('#password');
+    const productName = document.querySelector('#name');
+    const productDescription = document.querySelector('#description');
+    const productPrice = document.querySelector('#price');
+    const productStock = document.querySelector('#stock');
+    const productCategory = document.querySelector('#category');
+    const productImage = document.querySelector('#image');
+    const cookie = name => document.cookie.split('; ').find(row => row.startsWith(name + '='))?.split('=')[1];
+    const show = (text, type = 'muted') => { message.textContent = text; message.className = type; };
+
+    async function csrf() {
+      await fetch('/api/v1/auth/csrf', { credentials: 'same-origin' });
+      return decodeURIComponent(cookie('XSRF-TOKEN') || '');
+    }
+
+    async function request(url, options = {}) {
+      const token = await csrf();
+      options.credentials = 'same-origin';
+      options.headers = { ...(options.headers || {}), 'X-XSRF-TOKEN': token };
+      return fetch(url, options);
+    }
+
+    async function loadProducts() {
+      const response = await fetch('/api/v1/products?size=50');
+      const data = await response.json();
+      products.innerHTML = data.items.map(product => `
+        <article>
+          ${product.images[0] ? `<img src="${product.images[0].url}" alt="${escapeHtml(product.name)}">` : ''}
+          <h3>${escapeHtml(product.name)}</h3>
+          <p>${escapeHtml(product.description)}</p>
+          <strong>${product.price} ${product.currency}</strong>
+          <p class="muted">分類：${escapeHtml(product.category)}｜庫存：${product.stock === 0 ? '售罄' : product.stock}</p>
+        </article>`).join('') || '<p class="muted">目前沒有商品。</p>';
+    }
+
+    const escapeHtml = value => String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+
+    document.querySelector('#login-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const response = await request('/api/v1/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ identifier: loginIdentifier.value, password: loginPassword.value }) });
+      if (!response.ok) { show('登入失敗，請檢查帳號密碼。', 'error'); return; }
+      document.querySelector('#product-form').classList.remove('hidden');
+      show('登入成功，可以新增商品。', 'ok');
+    });
+
+    document.querySelector('#logout').addEventListener('click', async () => {
+      await request('/api/v1/auth/logout', { method: 'POST' });
+      document.querySelector('#product-form').classList.add('hidden');
+      show('已登出。');
+    });
+
+    document.querySelector('#product-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const response = await request('/api/v1/products', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name: productName.value, description: productDescription.value, price: productPrice.value,
+          stock: Number(productStock.value), category: productCategory.value }) });
+      if (!response.ok) { show('建立商品失敗，請查看 API 回應。', 'error'); return; }
+      const product = await response.json();
+      const file = productImage.files[0];
+      if (file) {
+        const data = new FormData();
+        data.append('file', file);
+        const uploadResponse = await request(`/api/v1/products/${product.id}/images`, { method: 'POST', body: data });
+        if (!uploadResponse.ok) { show('商品已建立，但圖片上傳失敗。', 'error'); return; }
+      }
+      event.target.reset(); await loadProducts(); show('商品建立成功。', 'ok');
+    });
+
+    loadProducts().catch(() => show('商品載入失敗，請確認 Spring Boot 已啟動。', 'error'));
+  </script>
+</body>
+</html>

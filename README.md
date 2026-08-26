@@ -11,6 +11,9 @@
 - BCrypt 密碼雜湊、Email／username 小寫正規化與唯一性
 - 一般會員與管理員權限分離
 - 初始管理員由環境變數建立，一般註冊不能建立管理員
+- 商品 CRUD、公開展示、搜尋／分類／排序／分頁
+- 商品圖片上傳與本機檔案儲存（JPEG、PNG、WebP，單檔 5 MB，每商品最多 5 張）
+- 商品所有權檢查與軟刪除，管理員可查看全部商品並軟刪除
 
 目前設定與範例帳密僅供本機面試展示；正式環境請使用不同密碼、HTTPS 與 `COOKIE_SECURE=true`。
 
@@ -63,7 +66,21 @@
 | GET | `/api/v1/auth/me` | 查詢目前登入會員 |
 | PUT | `/api/v1/auth/me` | 修改顯示名稱與電話 |
 | PUT | `/api/v1/auth/me/password` | 使用目前密碼修改新密碼 |
+| GET | `/api/v1/products` | 公開商品列表，預設每頁 12 筆 |
+| GET | `/api/v1/products/{id}` | 公開商品詳情 |
+| POST | `/api/v1/products` | 登入會員建立商品 |
+| PUT | `/api/v1/products/{id}` | 商品建立者修改商品 |
+| DELETE | `/api/v1/products/{id}` | 商品建立者軟刪除商品 |
+| GET | `/api/v1/seller/products` | 查看自己的商品（含已軟刪除） |
+| POST | `/api/v1/products/{id}/images` | 上傳商品圖片，multipart 欄位 `file` |
+| DELETE | `/api/v1/products/{id}/images/{imageId}` | 刪除自己的商品圖片 |
+| GET | `/api/v1/admin/products` | 管理員查看全部商品 |
+| DELETE | `/api/v1/admin/products/{id}` | 管理員軟刪除商品 |
 | GET | `/api/v1/admin/me` | 管理員測試 API |
+
+商品列表支援 `keyword`、`category`、`sort`（`newest`、`price_asc`、`price_desc`）、`page`（從 1 開始）與 `size`（1～50）。商品建立後直接為 `PUBLISHED`，庫存為 0 時仍會展示，但會顯示售罄狀態供後續購物車判斷。
+
+瀏覽器展示頁：`http://localhost:8080/products.html`。登入後可用賣方帳號建立商品並上傳一張圖片。
 
 所有寫入操作都需要先呼叫 `/api/v1/auth/csrf`，再把回傳 token 放到 `X-XSRF-TOKEN` Header。JWT Cookie 是 HttpOnly，前端 JavaScript 不能直接讀取它；CSRF Cookie 則可由前端讀取。
 

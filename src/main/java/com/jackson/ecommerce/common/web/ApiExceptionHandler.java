@@ -8,12 +8,28 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiErrorResponse> badRequest(BadRequestException exception, HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiErrorResponse> forbidden(ForbiddenException exception, HttpServletRequest request) {
+        return error(HttpStatus.FORBIDDEN, "FORBIDDEN", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> notFound(NotFoundException exception, HttpServletRequest request) {
+        return error(HttpStatus.NOT_FOUND, "NOT_FOUND", exception.getMessage(), request);
+    }
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiErrorResponse> conflict(ConflictException exception, HttpServletRequest request) {
@@ -38,6 +54,12 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> unreadable(HttpMessageNotReadableException exception,
                                                        HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Request body is invalid", request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> uploadTooLarge(MaxUploadSizeExceededException exception,
+                                                            HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "Image file must not exceed 5 MB", request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

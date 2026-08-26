@@ -45,4 +45,5 @@ END;
 
 GRANT CREATE TABLE TO ecommerce_app;
 GRANT ALTER ON SCHEMA::dbo TO ecommerce_app;
+GRANT REFERENCES ON SCHEMA::dbo TO ecommerce_app;
 GO
