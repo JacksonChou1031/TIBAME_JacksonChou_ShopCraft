@@ -1,13 +1,13 @@
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-GA-ubuntu
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
     container_name: ecommerce-sqlserver
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
     ports:
-      - "1434:1433"
+      - "1435:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
@@ -20,7 +20,7 @@ services:
       start_period: 20s
 
   sqlserver-init:
-    image: mcr.microsoft.com/mssql/server:2022-GA-ubuntu
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
     container_name: ecommerce-sqlserver-init
     depends_on:
       sqlserver:
