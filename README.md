@@ -17,7 +17,7 @@ SSMS 22 是選用工具，可用來查看 Docker 中的 SQL Server；應用程�
 3. 啟動 SQL Server：`docker compose --env-file .env up -d`。
 4. 確認 SQL Server 與初始化服務完成：`docker compose --env-file .env ps`。
 5. 在啟動 Spring Boot 的同一個 shell 載入資料庫環境變數。PowerShell 範例：`$env:DB_PASSWORD="ChangeMe_App_123!"`；Bash 範例：`export DB_PASSWORD='ChangeMe_App_123!'`。
-6. 啟動 Spring Boot：Windows 使用 `mvnw.cmd spring-boot:run`；其他環境使用 `./mvnw spring-boot:run`。
+6. 啟動 Spring Boot：Windows 使用 `.\mvnw.cmd spring-boot:run`；其他環境使用 `./mvnw spring-boot:run`。
 
 `.env` 是 Docker Compose 使用的環境檔，不會自動成為 Spring Boot 的環境變數；請依照你的 shell 載入相同的 `DB_PASSWORD`。
 
@@ -47,8 +47,8 @@ SQL Server 資料會保存在 Docker volume。只有在確定不需要本機資�
 ## Verification
 
 ```text
-mvnw.cmd test
-mvnw.cmd verify
+.\mvnw.cmd test
+.\mvnw.cmd verify
 ```
 
 啟動應用後，Readiness 必須顯示正常，且 Flyway 必須成功建立 `app_schema_metadata` 與自己的 migration history。

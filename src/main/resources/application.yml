@@ -25,6 +25,9 @@ management:
         enabled: true
       show-details: when_authorized
   health:
+    group:
+      readiness:
+        include: readinessState,db
     livenessstate:
       enabled: true
     readinessstate:
