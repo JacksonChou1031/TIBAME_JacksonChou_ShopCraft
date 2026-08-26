@@ -29,7 +29,7 @@ SSMS 22 是選用工具，可用來查看 Docker 中的 SQL Server；應用程�
 
 ## SQL Server / SSMS connection
 
-- Server: `localhost,1433`
+- Server: `localhost,1434`
 - Authentication: SQL Server Authentication
 - User: `sa` or `ecommerce_app`
 - Database: `ecommerce`

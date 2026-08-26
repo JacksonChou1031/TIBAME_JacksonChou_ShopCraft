@@ -275,7 +275,7 @@
 ### 11. 設定、資料庫與重現
 
 - Spring profile 區分開發與其他環境；資料庫密碼、JWT secret、初始管理員密碼從環境變數取得。
-- Docker Compose 啟動 SQL Server 2022，對外使用 1433；Spring Boot 連線使用專用 ecommerce_app 帳號，SA 僅用於初始化。
+- Docker Compose 啟動 SQL Server 2022，容器內使用 1433、主機對外使用 1434（避開本機 SQL Server port）；Spring Boot 連線使用專用 ecommerce_app 帳號，SA 僅用於初始化。
 - 開發環境使用 encrypt=true 與 trustServerCertificate=true；正式環境改用可信任憑證驗證。
 - 初始化機制建立 database、application login／user 與必要權限，再由 Flyway 建立 schema。
 - 開發 profile 提供測試會員、買賣雙方帳號、管理員、分類與商品資料；正式環境不自動建立展示資料。
