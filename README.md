@@ -15,6 +15,8 @@
 - 商品圖片上傳與本機檔案儲存（JPEG、PNG、WebP，單檔 5 MB，每商品最多 5 張）
 - 商品所有權檢查與軟刪除，管理員可查看全部商品並軟刪除
 - 會員購物車：同賣方限制、數量檢查、失效商品標記與清空
+- 訂單查詢與狀態流程：已付款、待出貨、已出貨、已完成、取消
+- 賣方訂單管理、模擬物流單號唯一性、買方確認收貨與管理員查看全部訂單
 
 目前設定與範例帳密僅供本機面試展示；正式環境請使用不同密碼、HTTPS 與 `COOKIE_SECURE=true`。
 
@@ -84,12 +86,24 @@
 | DELETE | `/api/v1/cart/items/{productId}` | 移除購物車明細 |
 | DELETE | `/api/v1/cart` | 清空購物車 |
 | POST | `/api/v1/checkout` | 模擬付款、建立訂單並扣庫存 |
+| GET | `/api/v1/orders` | 買方查看自己的訂單 |
+| GET | `/api/v1/orders/{id}` | 買方查看自己的訂單明細與商品快照 |
+| POST | `/api/v1/orders/{id}/confirm` | 買方確認收貨，`SHIPPED` → `COMPLETED` |
+| POST | `/api/v1/orders/{id}/cancel` | 買方取消尚未出貨訂單 |
+| GET | `/api/v1/seller/orders` | 賣方查看自己商品產生的訂單 |
+| GET | `/api/v1/seller/orders/{id}` | 賣方查看自己的訂單明細 |
+| POST | `/api/v1/seller/orders/{id}/prepare-shipment` | 賣方將 `PAID` → `PENDING_SHIPMENT` |
+| POST | `/api/v1/seller/orders/{id}/ship` | 賣方填寫模擬物流單號並出貨 |
+| GET | `/api/v1/admin/orders` | 管理員查看全部訂單 |
+| GET | `/api/v1/admin/orders/{id}` | 管理員查看訂單明細 |
 
 商品列表支援 `keyword`、`category`、`sort`（`newest`、`price_asc`、`price_desc`）、`page`（從 1 開始）與 `size`（1～50）。商品建立後直接為 `PUBLISHED`，庫存為 0 時仍會展示，但會顯示售罄狀態供後續購物車判斷。
 
 瀏覽器展示頁：`http://localhost:8080/products.html`。登入後可用賣方帳號建立商品並上傳一張圖片。
 
-結帳測試資料：`mockAccountNumber` 使用 `MOCK_SUCCESS` 代表付款成功，使用 `MOCK_FAILURE` 代表付款失敗；每次請求都要帶不同的 `Idempotency-Key` Header。宅配運費為 TWD 100，超商取貨運費為 TWD 60。
+結帳測試資料：`mockAccountNumber` 使用 `MOCK_SUCCESS` 代表付款成功，使用 `MOCK_FAILURE` 代表付款失敗；每次新的結帳請求都要帶唯一的 `Idempotency-Key` Header。宅配運費為 TWD 100，超商取貨運費為 TWD 60。
+
+訂單流程展示：結帳成功後訂單為 `PAID`，賣方呼叫 `prepare-shipment` 變成 `PENDING_SHIPMENT`，再以 `ship` 搭配例如 `MOCK-TRACK-001` 變成 `SHIPPED`，買方最後呼叫 `confirm` 變成 `COMPLETED`。已出貨訂單不可取消。
 
 所有寫入操作都需要先呼叫 `/api/v1/auth/csrf`，再把回傳 token 放到 `X-XSRF-TOKEN` Header。JWT Cookie 是 HttpOnly，前端 JavaScript 不能直接讀取它；CSRF Cookie 則可由前端讀取。
 

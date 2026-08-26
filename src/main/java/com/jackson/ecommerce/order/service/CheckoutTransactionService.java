@@ -47,6 +47,12 @@ public class CheckoutTransactionService {
         long orderId = orderRepository.insertOrder(memberId, sellerId, subtotal, shippingMethod.fee(), total,
                 shippingMethod, request.recipientName().trim(), request.recipientPhone().trim(),
                 blankToNull(request.storeName()), blankToNull(request.storeCode()), blankToNull(request.deliveryAddress()));
+        orderRepository.insertStatusHistory(orderId, com.jackson.ecommerce.order.domain.OrderStatus.PENDING_PAYMENT, memberId);
+        if (orderRepository.updateStatus(orderId, com.jackson.ecommerce.order.domain.OrderStatus.PENDING_PAYMENT,
+                com.jackson.ecommerce.order.domain.OrderStatus.PAID) != 1) {
+            throw new ConflictException("Order could not be marked as paid");
+        }
+        orderRepository.insertStatusHistory(orderId, com.jackson.ecommerce.order.domain.OrderStatus.PAID, memberId);
         for (CartItem item : items) {
             if (orderRepository.decreaseStock(item.productId(), item.quantity()) != 1) {
                 throw new ConflictException("Stock is no longer sufficient for product " + item.productId());

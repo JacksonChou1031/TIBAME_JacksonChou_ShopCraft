@@ -75,6 +75,12 @@
     <button>模擬付款並結帳</button>
   </form>
 
+  <section id="orders-section" class="hidden">
+    <h2>我的訂單</h2>
+    <button type="button" id="refresh-orders">重新整理訂單</button>
+    <div id="orders"></div>
+  </section>
+
   <script>
     const message = document.querySelector('#message');
     const products = document.querySelector('#products');
@@ -89,7 +95,9 @@
     const cartSection = document.querySelector('#cart-section');
     const cartItems = document.querySelector('#cart-items');
     const cartSummary = document.querySelector('#cart-summary');
-    const checkoutForm = document.querySelector('#checkout-form');
+  const checkoutForm = document.querySelector('#checkout-form');
+    const ordersSection = document.querySelector('#orders-section');
+    const orders = document.querySelector('#orders');
     const shippingMethod = document.querySelector('#shipping-method');
     const recipientName = document.querySelector('#recipient-name');
     const recipientPhone = document.querySelector('#recipient-phone');
@@ -148,7 +156,9 @@
       document.querySelector('#product-form').classList.remove('hidden');
       cartSection.classList.remove('hidden');
       checkoutForm.classList.remove('hidden');
+      ordersSection.classList.remove('hidden');
       await loadCart();
+      await loadOrders();
       show('登入成功，可以新增商品。', 'ok');
     });
 
@@ -157,6 +167,7 @@
       document.querySelector('#product-form').classList.add('hidden');
       cartSection.classList.add('hidden');
       checkoutForm.classList.add('hidden');
+      ordersSection.classList.add('hidden');
       show('已登出。');
     });
 
@@ -221,7 +232,7 @@
     checkoutForm.addEventListener('submit', async event => {
       event.preventDefault();
       const response = await request('/api/v1/checkout', { method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey.value},
         body: JSON.stringify({ shippingMethod: shippingMethod.value, recipientName: recipientName.value,
           recipientPhone: recipientPhone.value, storeName: storeName.value || null, storeCode: storeCode.value || null,
           deliveryAddress: deliveryAddress.value || null, mockAccountName: mockAccountName.value,
@@ -229,8 +240,35 @@
       if (!response.ok) { show(await responseMessage(response, '結帳失敗'), 'error'); return; }
       const result = await response.json();
       await loadCart(); await loadProducts();
+      await loadOrders();
       show(`結帳成功，訂單編號：${result.orderId}`, 'ok');
     });
+
+    async function loadOrders() {
+      const response = await fetch('/api/v1/orders', { credentials: 'same-origin' });
+      if (!response.ok) return;
+      const data = await response.json();
+      orders.innerHTML = data.items.map(order => `
+        <article>
+          <strong>訂單 #${order.orderId}</strong>
+          <p>狀態：${order.status}｜總額：${order.totalAmount}｜配送：${order.shippingMethod}</p>
+          ${order.trackingNumber ? `<p>物流單號：${escapeHtml(order.trackingNumber)}</p>` : ''}
+          <button type="button" onclick="viewOrder(${order.orderId})">查看明細</button>
+        </article>`).join('') || '<p class="muted">目前沒有訂單。</p>';
+    }
+
+    async function viewOrder(orderId) {
+      const response = await fetch(`/api/v1/orders/${orderId}`, { credentials: 'same-origin' });
+      if (!response.ok) { show(await responseMessage(response, '訂單載入失敗'), 'error'); return; }
+      const order = await response.json();
+      const delivery = order.shippingMethod === 'HOME_DELIVERY'
+        ? `地址：${order.deliveryAddress || '—'}`
+        : `門市：${order.storeName || '—'}（${order.storeCode || '—'}）`;
+      const history = order.statusHistory.map(item => `${item.status} ${new Date(item.changedAt).toLocaleString()}`).join(' → ');
+      show(`訂單 #${order.orderId}：${order.status}；收件人：${order.recipientName}／${order.recipientPhone}；${delivery}；商品快照：${order.items.map(item => `${item.productName} x ${item.quantity}（${item.unitPrice}）`).join('、')}；狀態歷程：${history}`, 'ok');
+    }
+
+    document.querySelector('#refresh-orders').addEventListener('click', loadOrders);
 
     loadProducts().catch(() => show('商品載入失敗，請確認 Spring Boot 已啟動。', 'error'));
   </script>
