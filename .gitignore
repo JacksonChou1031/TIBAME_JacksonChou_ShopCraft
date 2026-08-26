@@ -1,0 +1,8 @@
+.env
+.idea/
+*.iml
+target/
+.mvn/local-tooling/
+uploads/
+*.log
+.DS_Store
