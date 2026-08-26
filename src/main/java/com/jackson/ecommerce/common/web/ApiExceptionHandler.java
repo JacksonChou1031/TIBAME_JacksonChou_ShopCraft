@@ -1,0 +1,55 @@
+package com.jackson.ecommerce.common.web;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.Instant;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class ApiExceptionHandler {
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiErrorResponse> conflict(ConflictException exception, HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiErrorResponse> unauthorized(UnauthorizedException exception, HttpServletRequest request) {
+        return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiErrorResponse> validation(MethodArgumentNotValidException exception,
+                                                        HttpServletRequest request) {
+        String message = exception.getBindingResult().getFieldErrors().stream()
+                .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> unreadable(HttpMessageNotReadableException exception,
+                                                       HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Request body is invalid", request);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> dataIntegrity(DataIntegrityViolationException exception,
+                                                           HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", "Request conflicts with existing data", request);
+    }
+
+    private ResponseEntity<ApiErrorResponse> error(HttpStatus status, String code, String message,
+                                                   HttpServletRequest request) {
+        ApiErrorResponse body = new ApiErrorResponse(
+                Instant.now(), status.value(), code, message, request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
+    }
+}

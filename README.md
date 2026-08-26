@@ -1,54 +1,108 @@
 # Ecommerce MVP
 
-Java 21、Spring Boot 4.1.1、SQL Server 2022 與 Flyway 的面試展示用電商專案。
+面試展示用的 Spring Boot 電商／市集 MVP，使用 Java 21、Spring Boot 4.1.1、SQL Server 2022、Flyway、JdbcTemplate、Spring Security 與 JWT Cookie。
+
+## 目前完成
+
+- Spring Boot 基礎環境、Actuator、HikariCP、Flyway
+- SQL Server Docker Compose（主機 `1435` 對應容器 `1433`）
+- 會員註冊、登入、登出、查詢自己資料、修改密碼
+- JWT 存放於 HttpOnly Cookie，有效期 30 分鐘
+- BCrypt 密碼雜湊、Email／username 小寫正規化與唯一性
+- 一般會員與管理員權限分離
+- 初始管理員由環境變數建立，一般註冊不能建立管理員
+
+目前設定與範例帳密僅供本機面試展示；正式環境請使用不同密碼、HTTPS 與 `COOKIE_SECURE=true`。
 
 ## Prerequisites
 
 - JDK 21
 - Docker Desktop
 - Git
-
-SSMS 22 是選用工具，可用來查看 Docker 中的 SQL Server；應用程式本身不依賴 SSMS。
+- （選用）SQL Server Management Studio 22，用來查看資料庫
 
 ## First-time setup
 
-1. 複製環境變數範例並修改密碼。不要把 `.env` 提交到 GitHub。
-2. 啟動 Docker Desktop。
-3. 啟動 SQL Server：`docker compose --env-file .env up -d`。
-4. 確認 SQL Server 與初始化服務完成：`docker compose --env-file .env ps`。
-5. 在啟動 Spring Boot 的同一個 shell 載入資料庫環境變數。PowerShell 範例：`$env:DB_PASSWORD="ChangeMe_App_123!"`；Bash 範例：`export DB_PASSWORD='ChangeMe_App_123!'`。
-6. 啟動 Spring Boot：Windows 使用 `.\mvnw.cmd spring-boot:run`；其他環境使用 `./mvnw spring-boot:run`。
+1. 複製 `.env.example` 為 `.env`。`.env` 已被 Git 忽略，不要把正式密碼提交到 GitHub。
+2. 開啟 Docker Desktop。
+3. 在專案根目錄執行：
 
-`.env` 是 Docker Compose 使用的環境檔，不會自動成為 Spring Boot 的環境變數；請依照你的 shell 載入相同的 `DB_PASSWORD`。
+   ```powershell
+   docker compose --env-file .env up -d
+   docker compose --env-file .env ps
+   ```
 
-## Useful endpoints
+4. 在啟動 Spring Boot 的同一個 PowerShell 視窗設定環境變數（至少要設定以下值）：
 
-- Application health: `http://localhost:8080/actuator/health`
-- Readiness: `http://localhost:8080/actuator/health/readiness`
-- Liveness: `http://localhost:8080/actuator/health/liveness`
+   ```powershell
+   $env:DB_PASSWORD="ChangeMe_App_123!"
+   $env:JWT_SECRET="ChangeMe_Local_Jwt_Secret_At_Least_32_Characters_123!"
+   $env:INITIAL_ADMIN_EMAIL="admin@example.com"
+   $env:INITIAL_ADMIN_USERNAME="admin"
+   $env:INITIAL_ADMIN_PASSWORD="ChangeMe_Admin_123!"
+   $env:INITIAL_ADMIN_DISPLAY_NAME="System Administrator"
+   $env:INITIAL_ADMIN_PHONE="0900000000"
+   ```
+
+5. 啟動 Spring Boot：
+
+   ```powershell
+   .\mvnw.cmd spring-boot:run
+   ```
+
+啟動後 Flyway 會自動建立或更新資料表。之後若修改 Java 設定，請在終端機按 `Ctrl+C` 停止，再重新執行啟動指令。
+
+## Member API
+
+| Method | Path | 說明 |
+|---|---|---|
+| GET | `/api/v1/auth/csrf` | 取得 CSRF token 與 `XSRF-TOKEN` Cookie |
+| POST | `/api/v1/auth/register` | 註冊會員 |
+| POST | `/api/v1/auth/login` | Email 或 username 登入 |
+| POST | `/api/v1/auth/logout` | 清除登入 Cookie |
+| GET | `/api/v1/auth/me` | 查詢目前登入會員 |
+| PUT | `/api/v1/auth/me` | 修改顯示名稱與電話 |
+| PUT | `/api/v1/auth/me/password` | 使用目前密碼修改新密碼 |
+| GET | `/api/v1/admin/me` | 管理員測試 API |
+
+所有寫入操作都需要先呼叫 `/api/v1/auth/csrf`，再把回傳 token 放到 `X-XSRF-TOKEN` Header。JWT Cookie 是 HttpOnly，前端 JavaScript 不能直接讀取它；CSRF Cookie 則可由前端讀取。
+
+註冊 JSON 範例：
+
+```json
+{
+  "email": "buyer@example.com",
+  "username": "buyer01",
+  "password": "Member123!",
+  "displayName": "Demo Buyer",
+  "phone": "0912345678"
+}
+```
+
+## Health endpoints
+
+- `http://localhost:8080/actuator/health`
+- `http://localhost:8080/actuator/health/readiness`
+- `http://localhost:8080/actuator/health/liveness`
 
 ## SQL Server / SSMS connection
 
-- Server: `localhost,1435`
-- Authentication: SQL Server Authentication
-- User: `sa` or `ecommerce_app`
-- Database: `ecommerce`
-
-只將 `sa` 用於資料庫初始化；Spring Boot 使用 `ecommerce_app`。
+- Server：`localhost,1435`
+- Authentication：SQL Server Authentication
+- Database：`ecommerce`
+- Application user：`ecommerce_app`
 
 ## Stop the database
 
-```text
+```powershell
 docker compose --env-file .env down
 ```
 
-SQL Server 資料會保存在 Docker volume。只有在確定不需要本機資料時，才移除該 volume。
+不要使用 `down -v`，以免刪除 SQL Server 的資料卷。
 
 ## Verification
 
-```text
+```powershell
 .\mvnw.cmd test
 .\mvnw.cmd verify
 ```
-
-啟動應用後，Readiness 必須顯示正常，且 Flyway 必須成功建立 `app_schema_metadata` 與自己的 migration history。

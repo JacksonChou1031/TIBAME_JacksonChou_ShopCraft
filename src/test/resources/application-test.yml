@@ -1,8 +1,23 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:foundation;DB_CLOSE_DELAY=-1;MODE=MSSQLServer
+    url: jdbc:h2:mem:foundation;DB_CLOSE_DELAY=0;MODE=MSSQLServer
     username: sa
     password:
     driver-class-name: org.h2.Driver
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: always
+
+app:
+  security:
+    jwt-secret: test-secret-for-jwt-signing-must-be-at-least-32-bytes
+    jwt-expiration: 30m
+    cookie-secure: false
+  initial-admin:
+    email: admin@example.com
+    username: admin
+    password: ChangeMe_Admin_123!
+    display-name: Test Administrator
+    phone: 0900000000

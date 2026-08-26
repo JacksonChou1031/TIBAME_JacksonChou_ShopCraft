@@ -11,6 +11,18 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: true
 
+app:
+  security:
+    jwt-secret: ${JWT_SECRET}
+    jwt-expiration: ${JWT_EXPIRATION:30m}
+    cookie-secure: ${COOKIE_SECURE:false}
+  initial-admin:
+    email: ${INITIAL_ADMIN_EMAIL}
+    username: ${INITIAL_ADMIN_USERNAME}
+    password: ${INITIAL_ADMIN_PASSWORD}
+    display-name: ${INITIAL_ADMIN_DISPLAY_NAME}
+    phone: ${INITIAL_ADMIN_PHONE}
+
 server:
   port: ${SERVER_PORT:8080}
 
