@@ -14,6 +14,8 @@
     article { margin: 0; } article img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }
     .muted { color: #68758a; } .error { color: #b42318; } .ok { color: #087443; }
     .hidden { display: none; }
+    .cart-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border-top: 1px solid #e8edf4; padding: .6rem 0; }
+    .cart-item input { width: 5rem; }
   </style>
 </head>
 <body>
@@ -46,6 +48,13 @@
     <div id="products"></div>
   </section>
 
+  <section id="cart-section" class="hidden">
+    <h2>我的購物車</h2>
+    <div id="cart-items"></div>
+    <p id="cart-summary" class="muted"></p>
+    <button type="button" id="clear-cart">清空購物車</button>
+  </section>
+
   <script>
     const message = document.querySelector('#message');
     const products = document.querySelector('#products');
@@ -57,6 +66,9 @@
     const productStock = document.querySelector('#stock');
     const productCategory = document.querySelector('#category');
     const productImage = document.querySelector('#image');
+    const cartSection = document.querySelector('#cart-section');
+    const cartItems = document.querySelector('#cart-items');
+    const cartSummary = document.querySelector('#cart-summary');
     const cookie = name => document.cookie.split('; ').find(row => row.startsWith(name + '='))?.split('=')[1];
     const show = (text, type = 'muted') => { message.textContent = text; message.className = type; };
 
@@ -72,6 +84,15 @@
       return fetch(url, options);
     }
 
+    async function responseMessage(response, fallback) {
+      try {
+        const data = await response.json();
+        return data.message ? `${fallback}（${data.message}）` : `${fallback}（HTTP ${response.status}）`;
+      } catch (_) {
+        return `${fallback}（HTTP ${response.status}）`;
+      }
+    }
+
     async function loadProducts() {
       const response = await fetch('/api/v1/products?size=50');
       const data = await response.json();
@@ -82,6 +103,7 @@
           <p>${escapeHtml(product.description)}</p>
           <strong>${product.price} ${product.currency}</strong>
           <p class="muted">分類：${escapeHtml(product.category)}｜庫存：${product.stock === 0 ? '售罄' : product.stock}</p>
+          <button type="button" onclick="addToCart(${product.id})" ${product.stock === 0 ? 'disabled' : ''}>加入購物車</button>
         </article>`).join('') || '<p class="muted">目前沒有商品。</p>';
     }
 
@@ -91,14 +113,17 @@
       event.preventDefault();
       const response = await request('/api/v1/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ identifier: loginIdentifier.value, password: loginPassword.value }) });
-      if (!response.ok) { show('登入失敗，請檢查帳號密碼。', 'error'); return; }
+      if (!response.ok) { show(await responseMessage(response, '登入失敗'), 'error'); return; }
       document.querySelector('#product-form').classList.remove('hidden');
+      cartSection.classList.remove('hidden');
+      await loadCart();
       show('登入成功，可以新增商品。', 'ok');
     });
 
     document.querySelector('#logout').addEventListener('click', async () => {
       await request('/api/v1/auth/logout', { method: 'POST' });
       document.querySelector('#product-form').classList.add('hidden');
+      cartSection.classList.add('hidden');
       show('已登出。');
     });
 
@@ -107,16 +132,57 @@
       const response = await request('/api/v1/products', { method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ name: productName.value, description: productDescription.value, price: productPrice.value,
           stock: Number(productStock.value), category: productCategory.value }) });
-      if (!response.ok) { show('建立商品失敗，請查看 API 回應。', 'error'); return; }
+      if (!response.ok) { show(await responseMessage(response, '建立商品失敗'), 'error'); return; }
       const product = await response.json();
       const file = productImage.files[0];
       if (file) {
         const data = new FormData();
         data.append('file', file);
         const uploadResponse = await request(`/api/v1/products/${product.id}/images`, { method: 'POST', body: data });
-        if (!uploadResponse.ok) { show('商品已建立，但圖片上傳失敗。', 'error'); return; }
+        if (!uploadResponse.ok) { show(await responseMessage(uploadResponse, '商品已建立，但圖片上傳失敗'), 'error'); return; }
       }
       event.target.reset(); await loadProducts(); show('商品建立成功。', 'ok');
+    });
+
+    async function addToCart(productId) {
+      const response = await request('/api/v1/cart/items', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ productId, quantity: 1 }) });
+      if (!response.ok) { show(await responseMessage(response, '加入購物車失敗'), 'error'); return; }
+      await renderCart(await response.json()); show('已加入購物車。', 'ok');
+    }
+
+    async function loadCart() {
+      const response = await fetch('/api/v1/cart', { credentials: 'same-origin' });
+      if (response.ok) await renderCart(await response.json());
+    }
+
+    async function renderCart(cart) {
+      cartItems.innerHTML = cart.items.map(item => `
+        <div class="cart-item">
+          <span>${escapeHtml(item.productName)}｜${item.currentUnitPrice} ${item.currency}</span>
+          <input type="number" min="1" value="${item.quantity}" onchange="updateCartItem(${item.productId}, this.value)">
+          <span>${item.purchasable ? '可購買' : '不可購買：' + item.unavailableReason}</span>
+          <button type="button" onclick="removeCartItem(${item.productId})">移除</button>
+        </div>`).join('') || '<p class="muted">購物車是空的。</p>';
+      cartSummary.textContent = `目前金額：${cart.currentTotal}｜${cart.checkoutReady ? '可以結帳' : '有商品暫不可購買'}`;
+    }
+
+    async function updateCartItem(productId, quantity) {
+      const response = await request(`/api/v1/cart/items/${productId}`, { method: 'PATCH', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ quantity: Number(quantity) }) });
+      if (!response.ok) { show(await responseMessage(response, '更新購物車失敗'), 'error'); await loadCart(); return; }
+      await renderCart(await response.json());
+    }
+
+    async function removeCartItem(productId) {
+      const response = await request(`/api/v1/cart/items/${productId}`, { method: 'DELETE' });
+      if (!response.ok) { show(await responseMessage(response, '移除購物車明細失敗'), 'error'); return; }
+      await loadCart();
+    }
+
+    document.querySelector('#clear-cart').addEventListener('click', async () => {
+      const response = await request('/api/v1/cart', { method: 'DELETE' });
+      if (response.ok) await loadCart();
     });
 
     loadProducts().catch(() => show('商品載入失敗，請確認 Spring Boot 已啟動。', 'error'));

@@ -14,6 +14,7 @@
 - 商品 CRUD、公開展示、搜尋／分類／排序／分頁
 - 商品圖片上傳與本機檔案儲存（JPEG、PNG、WebP，單檔 5 MB，每商品最多 5 張）
 - 商品所有權檢查與軟刪除，管理員可查看全部商品並軟刪除
+- 會員購物車：同賣方限制、數量檢查、失效商品標記與清空
 
 目前設定與範例帳密僅供本機面試展示；正式環境請使用不同密碼、HTTPS 與 `COOKIE_SECURE=true`。
 
@@ -77,6 +78,11 @@
 | GET | `/api/v1/admin/products` | 管理員查看全部商品 |
 | DELETE | `/api/v1/admin/products/{id}` | 管理員軟刪除商品 |
 | GET | `/api/v1/admin/me` | 管理員測試 API |
+| GET | `/api/v1/cart` | 查看自己的購物車 |
+| POST | `/api/v1/cart/items` | 加入商品或累加數量 |
+| PATCH | `/api/v1/cart/items/{productId}` | 修改購物車數量 |
+| DELETE | `/api/v1/cart/items/{productId}` | 移除購物車明細 |
+| DELETE | `/api/v1/cart` | 清空購物車 |
 
 商品列表支援 `keyword`、`category`、`sort`（`newest`、`price_asc`、`price_desc`）、`page`（從 1 開始）與 `size`（1～50）。商品建立後直接為 `PUBLISHED`，庫存為 0 時仍會展示，但會顯示售罄狀態供後續購物車判斷。
 
