@@ -2,8 +2,14 @@ package com.jackson.ecommerce.member.api;
 
 import com.jackson.ecommerce.member.domain.Member;
 import com.jackson.ecommerce.member.service.MemberService;
+import com.jackson.ecommerce.common.web.ApiErrorResponse;
 import com.jackson.ecommerce.security.JwtService;
 import com.jackson.ecommerce.security.MemberPrincipal;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +28,7 @@ import java.time.Duration;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@Tag(name = "Authentication", description = "Registration, login and member profile APIs")
 public class AuthController {
     private final MemberService memberService;
     private final JwtService jwtService;
@@ -52,6 +59,11 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @ApiResponse(responseCode = "201", description = "Member registered")
+    @ApiResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "Email or username already exists",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<MemberResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(201).body(MemberResponse.from(memberService.register(request)));
     }
@@ -66,6 +78,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @SecurityRequirement(name = "cookieAuth")
     public ResponseEntity<Void> logout() {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, clearAuthCookie().toString())
@@ -73,17 +86,20 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @SecurityRequirement(name = "cookieAuth")
     public MemberResponse me(@AuthenticationPrincipal MemberPrincipal principal) {
         return MemberResponse.from(memberService.requireActive(principal.memberId()));
     }
 
     @PutMapping("/me")
+    @SecurityRequirement(name = "cookieAuth")
     public MemberResponse updateProfile(@AuthenticationPrincipal MemberPrincipal principal,
                                         @Valid @RequestBody UpdateProfileRequest request) {
         return MemberResponse.from(memberService.updateProfile(principal.memberId(), request));
     }
 
     @PutMapping("/me/password")
+    @SecurityRequirement(name = "cookieAuth")
     public ResponseEntity<Void> changePassword(@AuthenticationPrincipal MemberPrincipal principal,
                                                 @Valid @RequestBody ChangePasswordRequest request) {
         memberService.changePassword(principal.memberId(), request);

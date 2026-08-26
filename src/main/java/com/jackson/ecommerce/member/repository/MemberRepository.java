@@ -38,6 +38,11 @@ public class MemberRepository {
         return members.stream().findFirst();
     }
 
+    public long countAll() {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM members", Long.class);
+        return count == null ? 0 : count;
+    }
+
     public Optional<Member> findByLogin(String identifier) {
         String normalizedIdentifier = normalize(identifier);
         List<Member> members = jdbcTemplate.query(

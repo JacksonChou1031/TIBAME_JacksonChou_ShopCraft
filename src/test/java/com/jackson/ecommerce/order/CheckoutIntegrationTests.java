@@ -21,6 +21,11 @@ import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -30,6 +35,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -141,6 +148,131 @@ class CheckoutIntegrationTests {
                         .content(objectMapper.writeValueAsBytes(checkoutBody("HOME_DELIVERY", null, null,
                                 "Address", "MOCK_SUCCESS"))))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void concurrentCheckoutsForLastItemHaveOnlyOneSuccessfulBuyer() throws Exception {
+        Cookie seller = loginNewMember("raceSeller");
+        Cookie firstBuyer = loginNewMember("raceBuyerOne");
+        Cookie secondBuyer = loginNewMember("raceBuyerTwo");
+        long productId = createProduct(seller, "Race Product " + System.nanoTime(), 1, "25.00");
+        addToCart(firstBuyer, productId, 1);
+        addToCart(secondBuyer, productId, 1);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        int firstStatus;
+        int secondStatus;
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentCheckout(firstBuyer, "race-1", ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentCheckout(secondBuyer, "race-2", ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+
+            firstStatus = first.get(10, TimeUnit.SECONDS);
+            secondStatus = second.get(10, TimeUnit.SECONDS);
+            assertEquals(1, (firstStatus == 201 ? 1 : 0) + (secondStatus == 201 ? 1 : 0));
+            assertTrue((firstStatus == 201 || firstStatus == 409) && (secondStatus == 201 || secondStatus == 409));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        mockMvc.perform(get("/api/v1/products/{id}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stock").value(0));
+        mockMvc.perform(get("/api/v1/seller/orders").cookie(seller))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").value(org.hamcrest.Matchers.hasSize(1)));
+
+        Cookie losingBuyer = firstStatus == 409 ? firstBuyer : secondBuyer;
+        mockMvc.perform(get("/api/v1/cart").cookie(losingBuyer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].quantity").value(1));
+    }
+
+    @Test
+    void checkoutRejectsCartWhenStockWasSoldAfterItWasAdded() throws Exception {
+        Cookie seller = loginNewMember("staleStockSeller");
+        Cookie firstBuyer = loginNewMember("staleStockFirstBuyer");
+        Cookie secondBuyer = loginNewMember("staleStockSecondBuyer");
+        long productId = createProduct(seller, "Stale Stock Product " + System.nanoTime(), 1, "45.00");
+        addToCart(firstBuyer, productId, 1);
+        addToCart(secondBuyer, productId, 1);
+
+        checkout(firstBuyer, "stale-stock-success", checkoutBody("HOME_DELIVERY", null, null,
+                "Taipei City", "MOCK_SUCCESS")).andExpect(status().isCreated());
+        checkout(secondBuyer, "stale-stock-conflict", checkoutBody("HOME_DELIVERY", null, null,
+                "Taipei City", "MOCK_SUCCESS")).andExpect(status().isConflict());
+
+        mockMvc.perform(get("/api/v1/cart").cookie(secondBuyer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].quantity").value(1))
+                .andExpect(jsonPath("$.items[0].purchasable").value(false));
+        mockMvc.perform(get("/api/v1/seller/orders").cookie(seller))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").value(org.hamcrest.Matchers.hasSize(1)));
+    }
+
+    @Test
+    void concurrentCheckoutsWithSameIdempotencyKeyReplayOneResult() throws Exception {
+        Cookie seller = loginNewMember("sameKeySeller");
+        Cookie buyer = loginNewMember("sameKeyBuyer");
+        long productId = createProduct(seller, "Same Key Product " + System.nanoTime(), 1, "35.00");
+        addToCart(buyer, productId, 1);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<CheckoutCallResult> first = executor.submit(
+                    () -> concurrentCheckoutResult(buyer, "same-key-race", ready, start));
+            Future<CheckoutCallResult> second = executor.submit(
+                    () -> concurrentCheckoutResult(buyer, "same-key-race", ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+
+            CheckoutCallResult firstResult = first.get(10, TimeUnit.SECONDS);
+            CheckoutCallResult secondResult = second.get(10, TimeUnit.SECONDS);
+            assertEquals(1, (firstResult.status() == 201 ? 1 : 0) + (secondResult.status() == 201 ? 1 : 0));
+            assertEquals(1, (firstResult.replayed() ? 1 : 0) + (secondResult.replayed() ? 1 : 0));
+            assertTrue((firstResult.status() == 201 || firstResult.status() == 200)
+                    && (secondResult.status() == 201 || secondResult.status() == 200));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        mockMvc.perform(get("/api/v1/products/{id}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stock").value(0));
+        mockMvc.perform(get("/api/v1/orders").cookie(buyer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").value(org.hamcrest.Matchers.hasSize(1)));
+    }
+
+    private int concurrentCheckout(Cookie buyer, String key, CountDownLatch ready, CountDownLatch start)
+        throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent checkout start");
+        }
+        return checkout(buyer, key, checkoutBody("HOME_DELIVERY", null, null,
+                "Taipei City", "MOCK_SUCCESS")).andReturn().getResponse().getStatus();
+    }
+
+    private CheckoutCallResult concurrentCheckoutResult(Cookie buyer, String key, CountDownLatch ready,
+                                                        CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent checkout start");
+        }
+        MvcResult result = checkout(buyer, key, checkoutBody("HOME_DELIVERY", null, null,
+                "Taipei City", "MOCK_SUCCESS")).andReturn();
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        return new CheckoutCallResult(result.getResponse().getStatus(), body.path("replayed").asBoolean(false));
+    }
+
+    private record CheckoutCallResult(int status, boolean replayed) {
     }
 
     private org.springframework.test.web.servlet.ResultActions checkout(Cookie buyer, String key,

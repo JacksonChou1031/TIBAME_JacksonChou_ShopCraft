@@ -10,8 +10,10 @@ import com.jackson.ecommerce.order.api.CheckoutResponse;
 import com.jackson.ecommerce.order.domain.ShippingMethod;
 import com.jackson.ecommerce.order.repository.OrderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class CheckoutService {
@@ -23,6 +25,7 @@ public class CheckoutService {
     private final OrderRepository orderRepository;
     private final CheckoutTransactionService transactionService;
     private final CheckoutFailureRecorder failureRecorder;
+    private final ConcurrentHashMap<Long, Object> checkoutLocks = new ConcurrentHashMap<>();
 
     public CheckoutService(MemberService memberService, CartRepository cartRepository, OrderRepository orderRepository,
                            CheckoutTransactionService transactionService, CheckoutFailureRecorder failureRecorder) {
@@ -37,15 +40,20 @@ public class CheckoutService {
         memberService.requireActive(memberId);
         String key = normalizeKey(idempotencyKey);
         ShippingMethod shippingMethod = validateRequest(request);
+        Object checkoutLock = checkoutLocks.computeIfAbsent(memberId, ignored -> new Object());
+        synchronized (checkoutLock) {
+            return checkoutLocked(memberId, key, request, shippingMethod);
+        }
+    }
+
+    private CheckoutResult checkoutLocked(long memberId, String key, CheckoutRequest request,
+                                          ShippingMethod shippingMethod) {
         OrderRepository.CheckoutRequestRow existing = orderRepository.findCheckoutRequest(memberId, key).orElse(null);
         if (existing != null) {
             if ("FAILED".equals(existing.status())) {
                 throw new ConflictException("Idempotency key has already been used for a failed payment");
             }
-            OrderRepository.CheckoutSummary summary = orderRepository.findSummary(existing.orderId());
-            return new CheckoutResult(new CheckoutResponse(summary.orderId(), summary.status().name(), "SUCCESS",
-                    summary.shippingMethod().name(), summary.subtotal(), summary.shippingFee(), summary.total(),
-                    key, true, "Checkout request was already completed"), true);
+            return replay(existing, key);
         }
 
         List<CartItem> items = cartRepository.findItems(memberId);
@@ -62,8 +70,18 @@ public class CheckoutService {
         if (!MOCK_SUCCESS.equals(request.mockAccountNumber().trim())) {
             throw new BadRequestException("mockAccountNumber must be MOCK_SUCCESS or MOCK_FAILURE");
         }
-        CheckoutResponse response = transactionService.create(memberId, key, request, shippingMethod);
-        return new CheckoutResult(response, false);
+        try {
+            CheckoutResponse response = transactionService.create(memberId, key, request, shippingMethod);
+            return new CheckoutResult(response, false);
+        } catch (DataIntegrityViolationException exception) {
+            // A concurrent request with the same key may win the unique-key race after our initial lookup.
+            OrderRepository.CheckoutRequestRow concurrent = orderRepository.findCheckoutRequest(memberId, key)
+                    .orElse(null);
+            if (concurrent != null && "SUCCESS".equals(concurrent.status())) {
+                return replay(concurrent, key);
+            }
+            throw exception;
+        }
     }
 
     private ShippingMethod validateRequest(CheckoutRequest request) {
@@ -90,6 +108,13 @@ public class CheckoutService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private CheckoutResult replay(OrderRepository.CheckoutRequestRow request, String key) {
+        OrderRepository.CheckoutSummary summary = orderRepository.findSummary(request.orderId());
+        return new CheckoutResult(new CheckoutResponse(summary.orderId(), summary.status().name(), "SUCCESS",
+                summary.shippingMethod().name(), summary.subtotal(), summary.shippingFee(), summary.total(),
+                key, true, "Checkout request was already completed"), true);
     }
 
     public record CheckoutResult(CheckoutResponse response, boolean replayed) {

@@ -2,6 +2,8 @@ package com.jackson.ecommerce.product.api;
 
 import com.jackson.ecommerce.product.service.ProductService;
 import com.jackson.ecommerce.security.MemberPrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/seller/products")
+@Tag(name = "Seller Products", description = "Seller product listing APIs")
+@SecurityRequirement(name = "cookieAuth")
 public class SellerProductController {
     private final ProductService productService;
 

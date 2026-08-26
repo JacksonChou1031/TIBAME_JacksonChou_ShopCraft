@@ -127,6 +127,11 @@ public class OrderRepository {
         return findRows("1 = 1");
     }
 
+    public long countAll() {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders", Long.class);
+        return count == null ? 0 : count;
+    }
+
     public Optional<OrderRow> findById(long orderId) {
         return findRows("o.order_id = ?", orderId).stream().findFirst();
     }

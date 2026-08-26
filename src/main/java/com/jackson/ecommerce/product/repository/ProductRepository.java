@@ -128,6 +128,11 @@ public class ProductRepository {
         return new ProductPage(products, total);
     }
 
+    public long countAll() {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products", Long.class);
+        return count == null ? 0 : count;
+    }
+
     public long insertImage(long productId, String storageKey, String originalFilename,
                             String mediaType, long fileSize, int sortOrder) {
         String sql = """

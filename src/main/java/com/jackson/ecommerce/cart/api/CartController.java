@@ -2,6 +2,8 @@ package com.jackson.ecommerce.cart.api;
 
 import com.jackson.ecommerce.cart.service.CartService;
 import com.jackson.ecommerce.security.MemberPrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/cart")
+@Tag(name = "Cart", description = "Member shopping cart APIs")
+@SecurityRequirement(name = "cookieAuth")
 public class CartController {
     private final CartService cartService;
 

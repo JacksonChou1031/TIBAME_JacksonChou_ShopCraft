@@ -2,7 +2,13 @@ package com.jackson.ecommerce.product.api;
 
 import com.jackson.ecommerce.product.domain.ProductImage;
 import com.jackson.ecommerce.product.service.ProductService;
+import com.jackson.ecommerce.common.web.ApiErrorResponse;
 import com.jackson.ecommerce.security.MemberPrincipal;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -26,6 +32,7 @@ import java.io.InputStream;
 
 @RestController
 @RequestMapping("/api/v1/products")
+@Tag(name = "Products", description = "Public product catalog and member product APIs")
 public class ProductController {
     private final ProductService productService;
 
@@ -49,12 +56,17 @@ public class ProductController {
     }
 
     @PostMapping
+    @SecurityRequirement(name = "cookieAuth")
+    @ApiResponse(responseCode = "201", description = "Product created")
+    @ApiResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public ResponseEntity<ProductResponse> create(@AuthenticationPrincipal MemberPrincipal principal,
                                                    @Valid @RequestBody ProductRequest request) {
         return ResponseEntity.status(201).body(ProductResponse.from(productService.create(principal.memberId(), request)));
     }
 
     @PutMapping("/{productId}")
+    @SecurityRequirement(name = "cookieAuth")
     public ProductResponse update(@AuthenticationPrincipal MemberPrincipal principal,
                                   @PathVariable long productId,
                                   @Valid @RequestBody ProductRequest request) {
@@ -62,6 +74,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{productId}")
+    @SecurityRequirement(name = "cookieAuth")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal MemberPrincipal principal,
                                        @PathVariable long productId) {
         productService.delete(principal.memberId(), productId);
@@ -69,6 +82,7 @@ public class ProductController {
     }
 
     @PostMapping(value = "/{productId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @SecurityRequirement(name = "cookieAuth")
     public ResponseEntity<ProductImageUploadResponse> uploadImage(
             @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable long productId,
@@ -78,6 +92,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{productId}/images/{imageId}")
+    @SecurityRequirement(name = "cookieAuth")
     public ResponseEntity<Void> deleteImage(@AuthenticationPrincipal MemberPrincipal principal,
                                             @PathVariable long productId,
                                             @PathVariable long imageId) {

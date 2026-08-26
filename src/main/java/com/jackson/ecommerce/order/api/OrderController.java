@@ -2,6 +2,8 @@ package com.jackson.ecommerce.order.api;
 
 import com.jackson.ecommerce.order.service.OrderService;
 import com.jackson.ecommerce.security.MemberPrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@Tag(name = "Buyer Orders", description = "Buyer order history and confirmation APIs")
+@SecurityRequirement(name = "cookieAuth")
 public class OrderController {
     private final OrderService orderService;
 

@@ -8,7 +8,6 @@ import com.jackson.ecommerce.order.api.CheckoutResponse;
 import com.jackson.ecommerce.order.domain.ShippingMethod;
 import com.jackson.ecommerce.order.repository.OrderRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -24,7 +23,9 @@ public class CheckoutTransactionService {
         this.orderRepository = orderRepository;
     }
 
-    @Transactional(isolation = Isolation.SERIALIZABLE)
+    // Stock safety comes from the conditional atomic UPDATE in OrderRepository.decreaseStock().
+    // READ_COMMITTED avoids serializable deadlocks when different buyers checkout the same product.
+    @Transactional
     public CheckoutResponse create(long memberId, String idempotencyKey, CheckoutRequest request,
                                    ShippingMethod shippingMethod) {
         if (orderRepository.findCheckoutRequest(memberId, idempotencyKey).isPresent()) {

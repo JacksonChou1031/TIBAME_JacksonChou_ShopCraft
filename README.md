@@ -17,6 +17,9 @@
 - 會員購物車：同賣方限制、數量檢查、失效商品標記與清空
 - 訂單查詢與狀態流程：已付款、待出貨、已出貨、已完成、取消
 - 賣方訂單管理、模擬物流單號唯一性、買方確認收貨與管理員查看全部訂單
+- 管理員 Dashboard：會員、商品與訂單數量統計
+- Swagger UI／OpenAPI：主要 API、DTO、驗證錯誤格式與 Cookie JWT 權限說明
+- GitHub Actions：使用 Maven Wrapper 自動編譯與測試
 
 目前設定與範例帳密僅供本機面試展示；正式環境請使用不同密碼、HTTPS 與 `COOKIE_SECURE=true`。
 
@@ -80,6 +83,7 @@
 | GET | `/api/v1/admin/products` | 管理員查看全部商品 |
 | DELETE | `/api/v1/admin/products/{id}` | 管理員軟刪除商品 |
 | GET | `/api/v1/admin/me` | 管理員測試 API |
+| GET | `/api/v1/admin/dashboard` | 管理員查看會員、商品與訂單統計 |
 | GET | `/api/v1/cart` | 查看自己的購物車 |
 | POST | `/api/v1/cart/items` | 加入商品或累加數量 |
 | PATCH | `/api/v1/cart/items/{productId}` | 修改購物車數量 |
@@ -99,7 +103,11 @@
 
 商品列表支援 `keyword`、`category`、`sort`（`newest`、`price_asc`、`price_desc`）、`page`（從 1 開始）與 `size`（1～50）。商品建立後直接為 `PUBLISHED`，庫存為 0 時仍會展示，但會顯示售罄狀態供後續購物車判斷。
 
+本 MVP 沒有另外建立 `SELLER` 角色；註冊後的 `MEMBER` 可以同時作為買方與賣方。能建立商品的會員就是 Demo 賣方，另一個會員則可用來展示買方流程。管理員只有初始管理員帳號，不能透過一般註冊建立。
+
 瀏覽器展示頁：`http://localhost:8080/products.html`。登入後可用賣方帳號建立商品並上傳一張圖片。
+
+Swagger 文件：`http://localhost:8080/swagger-ui/index.html`；OpenAPI JSON：`http://localhost:8080/v3/api-docs`。Swagger 使用 `ECOMMERCE_AUTH` Cookie 表示 JWT 登入狀態；所有寫入 API 仍需 CSRF token。
 
 結帳測試資料：`mockAccountNumber` 使用 `MOCK_SUCCESS` 代表付款成功，使用 `MOCK_FAILURE` 代表付款失敗；每次新的結帳請求都要帶唯一的 `Idempotency-Key` Header。宅配運費為 TWD 100，超商取貨運費為 TWD 60。
 
@@ -118,6 +126,22 @@
   "phone": "0912345678"
 }
 ```
+
+建議的面試展示帳號：管理員使用 `.env` 的 `INITIAL_ADMIN_*`；另外依上方範例註冊 `seller@example.com / Seller123!` 與 `buyer@example.com / Buyer123!` 兩個一般會員。這兩個帳號不是預先寫死在資料庫，避免 GitHub 下載後與既有資料衝突。
+
+## Interview demo smoke test
+
+以下流程可在乾淨資料庫重現。建議使用 Postman，因為它能自動保存登入 Cookie；每一個 POST、PUT、PATCH、DELETE 前，先呼叫 `GET /api/v1/auth/csrf`，並將回傳 token 放入 `X-XSRF-TOKEN` Header。
+
+1. 以管理員帳號登入，查看 `GET /api/v1/admin/dashboard` 與 `GET /api/v1/admin/products`。
+2. 註冊並登入一個賣方帳號，呼叫 `POST /api/v1/products` 建立商品，例如價格 `99.90`、庫存 `5`；需要時以 multipart 呼叫圖片上傳 API。
+3. 註冊並登入另一個一般會員帳號，呼叫 `GET /api/v1/products` 找到商品，再用 `POST /api/v1/cart/items` 加入購物車。
+4. 呼叫 `POST /api/v1/checkout`，Header 使用新的 `Idempotency-Key`，付款帳號填 `MOCK_SUCCESS`；成功後訂單狀態為 `PAID`。
+5. 切換回賣方帳號，依序呼叫 `prepare-shipment` 與 `ship`，物流單號可填 `MOCK-TRACK-001`。
+6. 切換回買方帳號，呼叫 `POST /api/v1/orders/{id}/confirm`，訂單會變成 `COMPLETED`。
+7. 重新用相同 `Idempotency-Key` 呼叫結帳，確認回傳 `replayed: true` 且不會重複扣庫存。
+
+PowerShell 使用 `curl.exe` 傳 JSON 時容易遇到引號轉義問題；若出現 `INVALID_REQUEST`，請改用 Postman，或確認 Body 是真正的 `raw JSON`，不是被 PowerShell 移除引號的字串。
 
 ## Health endpoints
 
@@ -146,3 +170,13 @@ docker compose --env-file .env down
 .\mvnw.cmd test
 .\mvnw.cmd verify
 ```
+
+GitHub Actions 會在 push 與 pull request 時執行相同的 `mvnw verify`。測試使用 H2 相容模式，不需要在 CI 另外啟動 SQL Server；正式啟動仍使用 SQL Server + Flyway。
+
+## Future Improvements
+
+- 賣方商品審核與違規處分規則
+- 結算帳本、提領與退款流程
+- 真實金流、物流與超商門市 API 串接
+- Email 驗證、忘記密碼、重新設定密碼
+- 商品分類、評論、優惠券與更完整的管理員報表
