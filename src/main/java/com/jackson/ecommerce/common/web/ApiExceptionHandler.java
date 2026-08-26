@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import com.jackson.ecommerce.order.service.PaymentFailedException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -60,6 +61,12 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiErrorResponse> uploadTooLarge(MaxUploadSizeExceededException exception,
                                                             HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "Image file must not exceed 5 MB", request);
+    }
+
+    @ExceptionHandler(PaymentFailedException.class)
+    public ResponseEntity<ApiErrorResponse> paymentFailed(PaymentFailedException exception,
+                                                          HttpServletRequest request) {
+        return error(HttpStatus.PAYMENT_REQUIRED, "PAYMENT_FAILED", exception.getMessage(), request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

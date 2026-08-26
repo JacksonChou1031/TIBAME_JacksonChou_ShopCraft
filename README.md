@@ -83,10 +83,13 @@
 | PATCH | `/api/v1/cart/items/{productId}` | 修改購物車數量 |
 | DELETE | `/api/v1/cart/items/{productId}` | 移除購物車明細 |
 | DELETE | `/api/v1/cart` | 清空購物車 |
+| POST | `/api/v1/checkout` | 模擬付款、建立訂單並扣庫存 |
 
 商品列表支援 `keyword`、`category`、`sort`（`newest`、`price_asc`、`price_desc`）、`page`（從 1 開始）與 `size`（1～50）。商品建立後直接為 `PUBLISHED`，庫存為 0 時仍會展示，但會顯示售罄狀態供後續購物車判斷。
 
 瀏覽器展示頁：`http://localhost:8080/products.html`。登入後可用賣方帳號建立商品並上傳一張圖片。
+
+結帳測試資料：`mockAccountNumber` 使用 `MOCK_SUCCESS` 代表付款成功，使用 `MOCK_FAILURE` 代表付款失敗；每次請求都要帶不同的 `Idempotency-Key` Header。宅配運費為 TWD 100，超商取貨運費為 TWD 60。
 
 所有寫入操作都需要先呼叫 `/api/v1/auth/csrf`，再把回傳 token 放到 `X-XSRF-TOKEN` Header。JWT Cookie 是 HttpOnly，前端 JavaScript 不能直接讀取它；CSRF Cookie 則可由前端讀取。
 

@@ -55,6 +55,26 @@
     <button type="button" id="clear-cart">清空購物車</button>
   </section>
 
+  <form id="checkout-form" class="hidden">
+    <h2>模擬結帳</h2>
+    <select id="shipping-method">
+      <option value="HOME_DELIVERY">宅配到府（TWD 100）</option>
+      <option value="CONVENIENCE_STORE">超商取貨（TWD 60）</option>
+    </select>
+    <input id="recipient-name" placeholder="收件人姓名" required>
+    <input id="recipient-phone" placeholder="收件人電話" required>
+    <input id="store-name" placeholder="超商名稱（超商取貨必填）">
+    <input id="store-code" placeholder="門市代碼（超商取貨必填）">
+    <input id="delivery-address" placeholder="宅配地址（宅配必填）">
+    <input id="mock-account-name" value="Demo Payment Account" placeholder="模擬帳戶名稱" required>
+    <select id="mock-account-number">
+      <option value="MOCK_SUCCESS">MOCK_SUCCESS（付款成功）</option>
+      <option value="MOCK_FAILURE">MOCK_FAILURE（付款失敗）</option>
+    </select>
+    <input id="idempotency-key" placeholder="Idempotency-Key" required>
+    <button>模擬付款並結帳</button>
+  </form>
+
   <script>
     const message = document.querySelector('#message');
     const products = document.querySelector('#products');
@@ -69,6 +89,17 @@
     const cartSection = document.querySelector('#cart-section');
     const cartItems = document.querySelector('#cart-items');
     const cartSummary = document.querySelector('#cart-summary');
+    const checkoutForm = document.querySelector('#checkout-form');
+    const shippingMethod = document.querySelector('#shipping-method');
+    const recipientName = document.querySelector('#recipient-name');
+    const recipientPhone = document.querySelector('#recipient-phone');
+    const storeName = document.querySelector('#store-name');
+    const storeCode = document.querySelector('#store-code');
+    const deliveryAddress = document.querySelector('#delivery-address');
+    const mockAccountName = document.querySelector('#mock-account-name');
+    const mockAccountNumber = document.querySelector('#mock-account-number');
+    const idempotencyKey = document.querySelector('#idempotency-key');
+    idempotencyKey.value = `browser-checkout-${Date.now()}`;
     const cookie = name => document.cookie.split('; ').find(row => row.startsWith(name + '='))?.split('=')[1];
     const show = (text, type = 'muted') => { message.textContent = text; message.className = type; };
 
@@ -116,6 +147,7 @@
       if (!response.ok) { show(await responseMessage(response, '登入失敗'), 'error'); return; }
       document.querySelector('#product-form').classList.remove('hidden');
       cartSection.classList.remove('hidden');
+      checkoutForm.classList.remove('hidden');
       await loadCart();
       show('登入成功，可以新增商品。', 'ok');
     });
@@ -124,6 +156,7 @@
       await request('/api/v1/auth/logout', { method: 'POST' });
       document.querySelector('#product-form').classList.add('hidden');
       cartSection.classList.add('hidden');
+      checkoutForm.classList.add('hidden');
       show('已登出。');
     });
 
@@ -183,6 +216,20 @@
     document.querySelector('#clear-cart').addEventListener('click', async () => {
       const response = await request('/api/v1/cart', { method: 'DELETE' });
       if (response.ok) await loadCart();
+    });
+
+    checkoutForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const response = await request('/api/v1/checkout', { method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ shippingMethod: shippingMethod.value, recipientName: recipientName.value,
+          recipientPhone: recipientPhone.value, storeName: storeName.value || null, storeCode: storeCode.value || null,
+          deliveryAddress: deliveryAddress.value || null, mockAccountName: mockAccountName.value,
+          mockAccountNumber: mockAccountNumber.value }) });
+      if (!response.ok) { show(await responseMessage(response, '結帳失敗'), 'error'); return; }
+      const result = await response.json();
+      await loadCart(); await loadProducts();
+      show(`結帳成功，訂單編號：${result.orderId}`, 'ok');
     });
 
     loadProducts().catch(() => show('商品載入失敗，請確認 Spring Boot 已啟動。', 'error'));
