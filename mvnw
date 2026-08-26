@@ -9,5 +9,6 @@ else
 fi
 
 exec "$JAVA_EXE" ${MAVEN_OPTS:-} ${MAVEN_ARGS:-} \
+  -Dmaven.multiModuleProjectDirectory="$MAVEN_PROJECTBASEDIR" \
   -classpath "${MAVEN_PROJECTBASEDIR}/.mvn/wrapper/maven-wrapper.jar" \
   org.apache.maven.wrapper.MavenWrapperMain "$@"
