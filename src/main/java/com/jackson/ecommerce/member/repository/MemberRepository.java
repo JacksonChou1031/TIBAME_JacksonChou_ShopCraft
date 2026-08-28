@@ -77,6 +77,12 @@ public class MemberRepository {
         if (key == null) {
             key = keys.get("member_id");
         }
+        if (!(key instanceof Number)) {
+            key = keys.values().stream()
+                    .filter(Number.class::isInstance)
+                    .findFirst()
+                    .orElse(null);
+        }
         if (!(key instanceof Number memberId)) {
             throw new IllegalStateException("Member id was not returned after insert");
         }

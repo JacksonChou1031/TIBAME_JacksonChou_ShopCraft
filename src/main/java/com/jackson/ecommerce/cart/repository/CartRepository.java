@@ -46,6 +46,12 @@ public class CartRepository {
         if (key == null) {
             key = keys.get("cart_id");
         }
+        if (!(key instanceof Number)) {
+            key = keys.values().stream()
+                    .filter(Number.class::isInstance)
+                    .findFirst()
+                    .orElse(null);
+        }
         if (!(key instanceof Number cartId)) {
             throw new IllegalStateException("Cart id was not returned after insert");
         }

@@ -221,6 +221,12 @@ public class OrderRepository {
         if (key == null) {
             key = keys.get(lowerName);
         }
+        if (!(key instanceof Number)) {
+            key = keys.values().stream()
+                    .filter(Number.class::isInstance)
+                    .findFirst()
+                    .orElse(null);
+        }
         if (!(key instanceof Number id)) {
             throw new IllegalStateException(errorMessage);
         }

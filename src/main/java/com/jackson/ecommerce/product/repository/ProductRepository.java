@@ -52,6 +52,12 @@ public class ProductRepository {
         if (key == null) {
             key = keys.get("product_id");
         }
+        if (!(key instanceof Number)) {
+            key = keys.values().stream()
+                    .filter(Number.class::isInstance)
+                    .findFirst()
+                    .orElse(null);
+        }
         if (!(key instanceof Number productId)) {
             throw new IllegalStateException("Product id was not returned after insert");
         }
@@ -155,6 +161,12 @@ public class ProductRepository {
         Object key = keys.get("IMAGE_ID");
         if (key == null) {
             key = keys.get("image_id");
+        }
+        if (!(key instanceof Number)) {
+            key = keys.values().stream()
+                    .filter(Number.class::isInstance)
+                    .findFirst()
+                    .orElse(null);
         }
         if (!(key instanceof Number imageId)) {
             throw new IllegalStateException("Image id was not returned after insert");
